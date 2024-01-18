@@ -10,6 +10,7 @@ from tkinter import filedialog
 import json
 import ast
 import math
+from data_reader import Data_reader
 
 class Application:
 
@@ -54,6 +55,22 @@ class Application:
         return self.pos
 
 
+    def import_csv(self):
+        file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+
+        if file_path:
+            self.reader = Data_reader(file_path)
+            self.data = self.reader.load_data()
+
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            self.requests = self.reader.get_requests()
+            for id, lifecycle in self.requests.items():
+                self.tree.insert("", "end", text=id, values=(id, str(lifecycle)))
+        self.init_graph()
+        
+
+
     def on_tree_click(self, event):
         item = self.tree.focus() 
         print("Clicked on item:", self.tree.item(item, "text"))
@@ -84,20 +101,37 @@ class Application:
 
     def init_graph(self):
         self.G = nx.DiGraph()
-        data = pd.read_csv('graph_nodes.csv')['status_node'].tolist()
-        self.G.add_nodes_from(data)
+        data = self.reader.get_nodes()
         print(data)
+        self.G.add_nodes_from(data)
         pos = self.get_pos_values(data)
         self.get_pos_array(pos)
-        with open('edges.json') as f:
-            edges = json.load(f)
+        self.G.add_edges_from(self.reader.get_edges(), color = "grey")
+        self.draw_graph()
+    
+    def draw_graph(self):
+        nx.draw_networkx_nodes(self.G, self.pos, node_color="tab:blue", node_size=100, alpha=0.5)
+        nx.draw_networkx_labels(self.G, pos=self.pos, font_size = 6, font_weight="bold")  
+        nx.draw_networkx_edges(
+                                    self.G,
+                                    self.pos,
+                                    edgelist=self.G.edges,
+                                    edge_color="grey",
+                                )
 
-        self.colors = ['']
-        self.G.add_edges_from(edges, color = "grey")
+        self.figure = plt.gcf()
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_canvas)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.graph_canvas)
+        self.toolbar.update()
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     def get_edges(self, request):
         edges = []
-        request = json.loads(request)
         for i in range(len(request)-1):
             edges.append([str(tuple(request[i])), str(tuple(request[i+1]))])
         return edges
@@ -123,36 +157,11 @@ class Application:
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
         self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
 
-#        import_button = tk.Button(root, text="Import CSV", command=self.import_csv)
-#        import_button.pack()
+        import_button = tk.Button(root, text="Import CSV", command=self.import_csv)
+        import_button.pack()
 
-        df = pd.read_csv('processed_data.csv', header=None, names=['key', 'value'])
-        self.requests = dict(zip(df.drop(0)['key'], df.drop(0)['value']))
-        
-        self.init_graph()
-
-        for request, value in self.requests.items():
-            self.tree.insert("", "end", text = request, values=(request, value))
-
-        nx.draw_networkx_nodes(self.G, self.pos, node_color="tab:blue", node_size=100, alpha=0.5)
-        nx.draw_networkx_labels(self.G, pos=self.pos, font_size = 6, font_weight="bold")  
-        nx.draw_networkx_edges(
-                                    self.G,
-                                    self.pos,
-                                    edgelist=self.G.edges,
-                                    edge_color="grey",
-                                )
-
-        self.figure = plt.gcf()
-        self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_canvas)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.graph_canvas)
-        self.toolbar.update()
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        #df = pd.read_csv('processed_data.csv', header=None, names=['key', 'value'])
+        #self.requests = dict(zip(df.drop(0)['key'], df.drop(0)['value']))
     
 
 

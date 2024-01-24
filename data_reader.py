@@ -1,6 +1,5 @@
 from typing import Any
 import pandas as pd
-import json
 
 class Data_reader:
     def __init__(self, path) -> None:
@@ -13,8 +12,6 @@ class Data_reader:
 
     def get_edges(self):
         edges = []
-        print(self.result)
-
         
         for values in self.result.values():
             for i in range(len(values)-1):
@@ -26,7 +23,6 @@ class Data_reader:
 
     def get_requests(self):
         self.result = dict(zip(self.result['ticket_id'], self.result[0]))
-#        self.result.to_csv('processed_data.csv', index=False, header = headers)
         return self.result
     
     def get_nodes(self):

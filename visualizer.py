@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
 from tkinter import filedialog
-import json
 import ast
 import math
 from data_reader import Data_reader
@@ -59,31 +58,55 @@ class Application:
         file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
 
         if file_path:
+            self.root.config(cursor="wait")
             self.reader = Data_reader(file_path)
             self.data = self.reader.load_data()
+            
 
-            for item in self.tree.get_children():
-                self.tree.delete(item)
+            for item in self.request_tree.get_children():
+                self.request_tree.delete(item)
             self.requests = self.reader.get_requests()
             for id, lifecycle in self.requests.items():
-                self.tree.insert("", "end", text=id, values=(id, str(lifecycle)))
+                self.request_tree.insert("", "end", text=id, values=(id, str(lifecycle)))
+
+            self.lifecycle_stat = dict(sorted(self.get_requests_of_lifecycle_data().items(), key = lambda x: len(x[1]), reverse = True))
+            for item in self.lifecycle_tree.get_children():
+                self.lifecycle_tree.delete(item)
+            for lifecycle, requests in self.lifecycle_stat.items():
+                self.lifecycle_tree.insert("", "end", text=id, values=(str(lifecycle), len(requests)))
+        
+        
         self.init_graph()
         
+    def get_requests_of_lifecycle_data(self):
+        requests_of_lifecycle = {}
+        data = self.reader.result
 
+        for key, value in data.items():
+            new_key = [tuple(point) for point in value]
+            print(new_key)
+            requests_of_lifecycle.setdefault(tuple(new_key), []).append(key)
+        return requests_of_lifecycle
+
+    def get_statistic(self, lifecycle):
+        amount_of_requests = len(self.lifecycle_stat[lifecycle])
+        return (f"кол-во заявок с таким же жизненным циклом: {amount_of_requests}")
 
     def on_tree_click(self, event):
-        item = self.tree.focus() 
-        print("Clicked on item:", self.tree.item(item, "text"))
-        lifecycle = self.requests[self.tree.item(item, "text")]
+        item = self.request_tree.focus() 
+        print("Clicked on item:", self.request_tree.item(item, "text"))
+        lifecycle = self.requests[self.request_tree.item(item, "text")]
+        
         edges = self.get_edges(lifecycle)
+
         plt.clf()
+        
         colors = nx.get_edge_attributes(self.G, "color")
         for edge in edges:
             colors[tuple(edge)] = "red"
-        nx.draw_networkx_nodes(self.G, self.pos, node_color="tab:blue", node_size=100, alpha=0.4)
-        #nx.draw(self.G, pos = self.pos, with_labels=False, node_size=50, edge_color=self.colors)
-        nx.draw_networkx_labels(self.G, pos=self.pos, font_size = 6, font_weight="bold")  
 
+        nx.draw_networkx_nodes(self.G, self.pos, node_color="tab:blue", node_size=100, alpha=0.4)
+        nx.draw_networkx_labels(self.G, pos=self.pos, font_size = 6, font_weight="bold")  
         nx.draw_networkx_edges(
                                     self.G,
                                     self.pos,
@@ -94,6 +117,8 @@ class Application:
         # Обновляем холст Matplotlib
         self.figure = plt.gcf()
         self.canvas.draw()
+        #self.statistic_canvas.clipboard_clear()
+        #self.statistic_canvas.create_text(200, 100, text = self.get_statistic(tuple([tuple(point) for point in lifecycle])))
 
         # Упаковываем холст в окно Tkinter
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -102,7 +127,6 @@ class Application:
     def init_graph(self):
         self.G = nx.DiGraph()
         data = self.reader.get_nodes()
-        print(data)
         self.G.add_nodes_from(data)
         pos = self.get_pos_values(data)
         self.get_pos_array(pos)
@@ -129,6 +153,7 @@ class Application:
         self.toolbar.update()
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.root.config(cursor = "")
 
     def get_edges(self, request):
         edges = []
@@ -141,28 +166,51 @@ class Application:
         self.root = root
         self.root.title("Request visualizer")
         
-        self.graph_canvas = tk.Canvas(root, width=600, height=800)
-        self.graph_canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.graph_canvas = tk.Canvas(self.root, width=600, height=800)
+        self.graph_canvas.pack(anchor = NW, side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        self.tree = ttk.Treeview(root, columns=("request", "lifecycle"))
-        self.tree.heading("#0", text="ID")
-        self.tree.heading("#1", text="Request ID")
-        self.tree.heading("#2", text="Lifecycle")
-        self.tree.column("#0", stretch=tk.NO, width=0)
-        self.tree.column("#1", stretch=tk.NO, width=50)
-        self.tree.column("#2", stretch=tk.NO, width=250)
-        v_scrollbar = ttk.Scrollbar(root, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscroll=v_scrollbar.set)
-        v_scrollbar.pack(side="right", fill="y")
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
-        self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
+        self.forest_frame = ttk.Frame(self.root)
 
-        import_button = tk.Button(root, text="Import CSV", command=self.import_csv)
-        import_button.pack()
+        import_button = tk.Button(master = self.forest_frame, text="Import CSV", command=self.import_csv)
+        import_button.pack(anchor = NW)
 
-        #df = pd.read_csv('processed_data.csv', header=None, names=['key', 'value'])
-        #self.requests = dict(zip(df.drop(0)['key'], df.drop(0)['value']))
-    
+        self.request_frame = ttk.Frame(master = self.forest_frame)
+        self.request_frame.config(cursor = "hand2")
+        self.request_tree = ttk.Treeview(self.request_frame, columns=("request", "lifecycle"))
+        self.request_tree.heading("#0", text="ID")
+        self.request_tree.heading("#1", text="Request ID")
+        self.request_tree.heading("#2", text="Lifecycle")
+        self.request_tree.column("#0", stretch=tk.NO, width=0)
+        self.request_tree.column("#1", stretch=tk.YES, width=80)
+        self.request_tree.column("#2", stretch=tk.YES, width=300)
+        v_scrollbar = ttk.Scrollbar(master = self.request_frame, orient="vertical", command=self.request_tree.yview)
+        self.request_tree.configure(yscroll=v_scrollbar.set)
+        v_scrollbar.pack(side = tk.RIGHT, fill = Y, expand = True)
+        self.request_tree.bind("<ButtonRelease-1>", self.on_tree_click)
+        self.request_tree.pack(anchor = NW, side = tk.LEFT, fill = Y, expand = True)
+        self.request_frame.pack(anchor = NW, side = tk.TOP, fill = Y, expand=True)
+
+
+        self.lifecycle_frame = ttk.Frame(master = self.forest_frame)
+        self.lifecycle_tree = ttk.Treeview(self.lifecycle_frame, columns=("lifecycle", "cases"))
+        self.lifecycle_tree.heading("#0", text="ID")
+        self.lifecycle_tree.heading("#1", text="Lifecycle")
+        self.lifecycle_tree.heading("#2", text="Cases")
+
+
+        self.lifecycle_tree.column("#0", stretch=tk.NO, width=0)
+        self.lifecycle_tree.column("#1", stretch=tk.YES, width=300)
+        self.lifecycle_tree.column("#2", stretch=tk.YES, width=80)
+        v_scrollbar_LC = ttk.Scrollbar(master = self.lifecycle_frame, orient="vertical", command=self.lifecycle_tree.yview)
+        self.lifecycle_tree.configure(yscroll=v_scrollbar_LC.set)
+        v_scrollbar_LC.pack(side=tk.RIGHT, fill = Y, expand = True)
+        self.lifecycle_tree.pack(anchor = NW, fill = Y, expand=True, side = tk.LEFT)
+        self.lifecycle_frame.pack(anchor = NW, side = tk.BOTTOM, fill = Y, expand=True)
+
+        self.forest_frame.pack(anchor = NW, side = LEFT, fill = Y, expand = False)
+        
+       # self.statistic_canvas = tk.Canvas(self.frame, bg = 'white', highlightthickness=1, highlightbackground = 'black')
+       # self.statistic_canvas.pack(anchor = NW, fill = BOTH)
 
 
 root = tk.Tk()

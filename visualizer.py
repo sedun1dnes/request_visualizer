@@ -58,6 +58,7 @@ class Application:
         file_path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
 
         if file_path:
+            
             self.root.config(cursor="wait")
             self.reader = Data_reader(file_path)
             self.data = self.reader.load_data()
@@ -75,8 +76,7 @@ class Application:
             for lifecycle, requests in self.lifecycle_stat.items():
                 self.lifecycle_tree.insert("", "end", text=id, values=(str(lifecycle), len(requests)))
         
-        
-        self.init_graph()
+            self.init_graph()
         
     def get_requests_of_lifecycle_data(self):
         requests_of_lifecycle = {}
@@ -84,7 +84,6 @@ class Application:
 
         for key, value in data.items():
             new_key = [tuple(point) for point in value]
-            print(new_key)
             requests_of_lifecycle.setdefault(tuple(new_key), []).append(key)
         return requests_of_lifecycle
 
@@ -102,6 +101,7 @@ class Application:
         plt.clf()
         
         colors = nx.get_edge_attributes(self.G, "color")
+
         for edge in edges:
             colors[tuple(edge)] = "red"
 
@@ -134,6 +134,11 @@ class Application:
         self.draw_graph()
     
     def draw_graph(self):
+        self.graph_canvas.destroy()
+        self.graph_canvas = tk.Canvas(self.root, width=600, height=800)
+        self.graph_canvas.pack(anchor = NW, side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self.figure = plt.figure()
+
         nx.draw_networkx_nodes(self.G, self.pos, node_color="tab:blue", node_size=100, alpha=0.5)
         nx.draw_networkx_labels(self.G, pos=self.pos, font_size = 6, font_weight="bold")  
         nx.draw_networkx_edges(
@@ -143,15 +148,13 @@ class Application:
                                     edge_color="grey",
                                 )
 
-        self.figure = plt.gcf()
+        
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_canvas)
         self.canvas.draw()
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.graph_canvas)
         self.toolbar.update()
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.root.config(cursor = "")
 
@@ -190,14 +193,11 @@ class Application:
         self.request_tree.pack(anchor = NW, side = tk.LEFT, fill = Y, expand = True)
         self.request_frame.pack(anchor = NW, side = tk.TOP, fill = Y, expand=True)
 
-
         self.lifecycle_frame = ttk.Frame(master = self.forest_frame)
         self.lifecycle_tree = ttk.Treeview(self.lifecycle_frame, columns=("lifecycle", "cases"))
         self.lifecycle_tree.heading("#0", text="ID")
         self.lifecycle_tree.heading("#1", text="Lifecycle")
         self.lifecycle_tree.heading("#2", text="Cases")
-
-
         self.lifecycle_tree.column("#0", stretch=tk.NO, width=0)
         self.lifecycle_tree.column("#1", stretch=tk.YES, width=300)
         self.lifecycle_tree.column("#2", stretch=tk.YES, width=80)
